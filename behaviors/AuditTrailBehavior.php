@@ -28,11 +28,12 @@ class AuditTrailBehavior extends \yii\base\Behavior
     const AUDIT_TYPE_UPDATE = 'update';
     const AUDIT_TYPE_DELETE = 'delete';
     const AUDIT_TYPE_VIEW = 'view';
+    const AUDIT_TYPE_PRINT = 'print';
 
     /**
      * @var string[] holds all allowed audit types
      */
-    public static $AUDIT_TYPES = [self::AUDIT_TYPE_INSERT, self::AUDIT_TYPE_UPDATE, self::AUDIT_TYPE_DELETE, self::AUDIT_TYPE_VIEW];
+    public static $AUDIT_TYPES = [self::AUDIT_TYPE_INSERT, self::AUDIT_TYPE_UPDATE, self::AUDIT_TYPE_DELETE, self::AUDIT_TYPE_VIEW, self::AUDIT_TYPE_PRINT];
 
     /**
      * @var string[] if defined, the listed attributes will be ignored. Good examples for
@@ -86,6 +87,11 @@ class AuditTrailBehavior extends \yii\base\Behavior
      * @var boolean if set to true, views will be logged (default: true)
      */
     public $logView = true;
+
+    /**
+     * @var boolean if set to true, prints will be logged (default: true)
+     */
+    public $logPrint = true;
 
     /**
      * @var \Closure[] contains an array with a model attribute as key and a either a string with
@@ -196,6 +202,8 @@ class AuditTrailBehavior extends \yii\base\Behavior
         // but this is not a problem since it is also a limitation of voskobovitch
         if (key_exists('linkerBehavior', $this->owner->behaviors())) {
             foreach ($this->owner->behaviors()['linkerBehavior']['relations'] as $attr => $relation) {
+                //skip if ignored
+                if (!in_array($attr, $relevantAttrs)) continue;
                 $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
                 $old_ids = [];
                 foreach ($this->owner->$relation as $relmodel) {
@@ -236,6 +244,17 @@ class AuditTrailBehavior extends \yii\base\Behavior
     {
         if (!$this->logView) return;
         $entry = $this->createPreparedAuditTrailEntry(self::AUDIT_TYPE_VIEW);
+
+        static::saveEntry($entry);
+    }
+
+    /**
+     * Handler for logging a print event
+     */
+    public function logPrint()
+    {
+        if (!$this->logPrint) return;
+        $entry = $this->createPreparedAuditTrailEntry(self::AUDIT_TYPE_PRINT);
 
         static::saveEntry($entry);
     }
@@ -316,7 +335,11 @@ class AuditTrailBehavior extends \yii\base\Behavior
         //get cols from db-schema
         $cols = array_keys($this->owner->getTableSchema()->columns);
 
-        //return if no ignored cols
+        // add the voskobovich virtual attributes
+        if (key_exists('linkerBehavior', $this->owner->behaviors())) {
+            $cols = array_merge($cols, array_keys($this->owner->behaviors()['linkerBehavior']['relations']));
+        }
+
         if (count($this->ignoredAttributes) === 0) return $cols;
 
         //remove ignored cols and return
