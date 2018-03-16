@@ -9,6 +9,7 @@ use yii\base\InvalidValueException;
 use asinfotrack\yii2\audittrail\models\AuditTrailEntry;
 use asinfotrack\yii2\toolbox\helpers\PrimaryKey;
 use yii\helpers\ArrayHelper;
+use yii\web\HeadersAlreadySentException;
 
 /**
  * Behavior which enables a model to be audited. Each modification (insert, update and delete)
@@ -29,6 +30,11 @@ class AuditTrailBehavior extends \yii\base\Behavior
     const AUDIT_TYPE_DELETE = 'delete';
     const AUDIT_TYPE_VIEW = 'view';
     const AUDIT_TYPE_PRINT = 'print';
+
+    //constants whether to include one ore more one-to-many extensions
+    const LINK_MANY_NONE = 0;
+    const LINK_MANY_VOSKOBOVITCH_YII2_MANY_TO_MANY_BEHAVIOUR = 1;
+    const LINK_MANY_YII2TECH_AR_LINKMANY = 2;
 
     /**
      * @var string[] holds all allowed audit types
@@ -94,6 +100,11 @@ class AuditTrailBehavior extends \yii\base\Behavior
     public $logPrint = true;
 
     /**
+     * @var integer whether to include a many-to-many behaviour extensions
+     */
+    public $manyToManyBehaviourExtensions = self::LINK_MANY_NONE;
+
+    /**
      * @var \Closure[] contains an array with a model attribute as key and a either a string with
      * a default yii-format or a closure as its value. Example:
      * <code>
@@ -140,6 +151,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
      * Handler for after insert event
      *
      * @param \yii\db\AfterSaveEvent $event the after save event
+     * @throws InvalidValueException
      */
     public function onAfterInsert($event)
     {
@@ -170,6 +182,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
      * Handler for after update event
      *
      * @param \yii\db\AfterSaveEvent $event the after save event
+     * @throws InvalidValueException
      */
     public function onAfterUpdate($event)
     {
@@ -197,27 +210,73 @@ class AuditTrailBehavior extends \yii\base\Behavior
             $entry->addChange($attrName, $oldVal, $newVal);
         }
 
-        // check if there are voskobovitch/linkerbehaviour relations
+        // check if there are yii2tech/ar-linkmany relations
         // caution, works only for non composite primary keys in the related model
         // but this is not a problem since it is also a limitation of voskobovitch
-        if (key_exists('linkerBehavior', $this->owner->behaviors())) {
-            foreach ($this->owner->behaviors()['linkerBehavior']['relations'] as $attr => $relation) {
-                //skip if ignored
-                if (!in_array($attr, $relevantAttrs)) continue;
+
+        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
+            foreach ($this->owner->behaviors() as $relName => $relConfig) {
+                // skip if not a yii2tech/LinkManyBehavior class
+                if (!isset($relConfig['class'])) continue;
+                if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
+                // skip if ignored
+                if (!in_array($relConfig['relationReferenceAttribute'], $relevantAttrs)) continue;
+
+                $relation = $relConfig['relation'];
+                $attribute = $relConfig['relationReferenceAttribute'];
                 $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
+
+                // old ids
                 $old_ids = [];
                 foreach ($this->owner->$relation as $relmodel) {
                     $old_ids[] = (string)$relmodel->$pk;
                 }
 
-                $new_ids = $this->owner->$attr;
+                // new ids
+                $new_ids = $this->owner->$attribute;
                 if ($new_ids === "") {
                     $new_ids = [];
                 }
-                if ($old_ids != $new_ids) {
+
+                if (!(count($new_ids) == count($old_ids) && !array_diff($new_ids, $old_ids))) {
                     $diff_old_ids = array_diff($old_ids, $new_ids);
                     $diff_new_ids = array_diff($new_ids, $old_ids);
-                    $entry->addChange($attr, join(', ', $diff_old_ids), join(', ', $diff_new_ids));
+                    $entry->addChange($attribute, join(', ', $diff_old_ids), join(', ', $diff_new_ids));
+                }
+            }
+        }
+
+        // check if there are voskobovitch/linkerbehaviour relations
+        // caution, works only for non composite primary keys in the related model
+        // but this is not a problem since it is also a limitation of voskobovitch
+
+        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_VOSKOBOVITCH_YII2_MANY_TO_MANY_BEHAVIOUR) {
+            if (key_exists('linkerBehavior', $this->owner->behaviors())) {
+                foreach ($this->owner->behaviors()['linkerBehavior']['relations'] as $attr => $relation) {
+                    //skip if ignored
+                    if (!in_array($attr, $relevantAttrs)) continue;
+
+                    if (is_array($relation)) {
+                        $relation = $relation[0];
+                    }
+
+                    $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
+
+                    $old_ids = [];
+
+                    foreach ($this->owner->$relation as $relmodel) {
+                        $old_ids[] = (string)$relmodel->$pk;
+                    }
+
+                    $new_ids = $this->owner->$attr;
+                    if ($new_ids === "") {
+                        $new_ids = [];
+                    }
+                    if ($old_ids != $new_ids) {
+                        $diff_old_ids = array_diff($old_ids, $new_ids);
+                        $diff_new_ids = array_diff($new_ids, $old_ids);
+                        $entry->addChange($attr, join(', ', $diff_old_ids), join(', ', $diff_new_ids));
+                    }
                 }
             }
         }
@@ -264,6 +323,8 @@ class AuditTrailBehavior extends \yii\base\Behavior
      *
      * @param string $changeKind the kind of audit trail entry (use this classes statics)
      * @return \asinfotrack\yii2\audittrail\models\AuditTrailEntry
+     * @throws InvalidConfigException
+     * @throws \yii\base\InvalidParamException
      */
     protected function createPreparedAuditTrailEntry($changeKind)
     {
@@ -335,9 +396,21 @@ class AuditTrailBehavior extends \yii\base\Behavior
         //get cols from db-schema
         $cols = array_keys($this->owner->getTableSchema()->columns);
 
+        // add the yii2tech/ar-linkmany virtual attributes
+        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
+            foreach ($this->owner->behaviors() as $relName => $relConfig) {
+                // skip if not a yii2tech/LinkManyBehavior class
+                if (!isset($relConfig['class'])) continue;
+                if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
+                $cols[] = $relConfig['relationReferenceAttribute'];
+            }
+        }
+
         // add the voskobovich virtual attributes
-        if (key_exists('linkerBehavior', $this->owner->behaviors())) {
-            $cols = array_merge($cols, array_keys($this->owner->behaviors()['linkerBehavior']['relations']));
+        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_VOSKOBOVITCH_YII2_MANY_TO_MANY_BEHAVIOUR) {
+            if (key_exists('linkerBehavior', $this->owner->behaviors())) {
+                $cols = array_merge($cols, array_keys($this->owner->behaviors()['linkerBehavior']['relations']));
+            }
         }
 
         if (count($this->ignoredAttributes) === 0) return $cols;
