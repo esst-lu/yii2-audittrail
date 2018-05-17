@@ -33,7 +33,6 @@ class AuditTrailBehavior extends \yii\base\Behavior
 
     //constants whether to include one ore more one-to-many extensions
     const LINK_MANY_NONE = 0;
-    const LINK_MANY_VOSKOBOVITCH_YII2_MANY_TO_MANY_BEHAVIOUR = 1;
     const LINK_MANY_YII2TECH_AR_LINKMANY = 2;
 
     /**
@@ -160,20 +159,29 @@ class AuditTrailBehavior extends \yii\base\Behavior
 
         //if configured write initial values
         if ($this->persistValuesOnInsert) {
-            foreach ($this->getRelevantDbAttributes() as $attrName) {
+            $relevantAttrs = $this->getRelevantDbAttributes();
+
+            foreach ($relevantAttrs as $attrName) {
+                // skip if ignore
+                if (!in_array($attrName, $relevantAttrs)) continue;
+
                 $newVal = $this->owner->{$attrName};
 
-                //catch null values
+                // catch null values
                 if ($newVal === null) continue;
 
-                //catch empty strings
+                // catch empty strings
                 if ($this->emptyStringIsNull && is_string($newVal) && empty($newVal)) {
                     continue;
                 }
 
+                if (is_array($newVal)) continue;
+
                 $entry->addChange($attrName, null, $newVal);
             }
         }
+
+        $this->linkManyUpdateInsert($relevantAttrs, $entry);
 
         static::saveEntry($entry);
     }
@@ -214,72 +222,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
         // caution, works only for non composite primary keys in the related model
         // but this is not a problem since it is also a limitation of voskobovitch
 
-        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
-            foreach ($this->owner->behaviors() as $relName => $relConfig) {
-                // skip if not a yii2tech/LinkManyBehavior class
-                if (!isset($relConfig['class'])) continue;
-                if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
-                // skip if ignored
-                if (!in_array($relConfig['relationReferenceAttribute'], $relevantAttrs)) continue;
-
-                $relation = $relConfig['relation'];
-                $attribute = $relConfig['relationReferenceAttribute'];
-                $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
-
-                // old ids
-                $old_ids = [];
-                foreach ($this->owner->$relation as $relmodel) {
-                    $old_ids[] = (string)$relmodel->$pk;
-                }
-
-                // new ids
-                $new_ids = $this->owner->$attribute;
-                if ($new_ids === "") {
-                    $new_ids = [];
-                }
-
-                if (!(count($new_ids) == count($old_ids) && !array_diff($new_ids, $old_ids))) {
-                    $diff_old_ids = array_diff($old_ids, $new_ids);
-                    $diff_new_ids = array_diff($new_ids, $old_ids);
-                    $entry->addChange($attribute, join(', ', $diff_old_ids), join(', ', $diff_new_ids));
-                }
-            }
-        }
-
-        // check if there are voskobovitch/linkerbehaviour relations
-        // caution, works only for non composite primary keys in the related model
-        // but this is not a problem since it is also a limitation of voskobovitch
-
-        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_VOSKOBOVITCH_YII2_MANY_TO_MANY_BEHAVIOUR) {
-            if (key_exists('linkerBehavior', $this->owner->behaviors())) {
-                foreach ($this->owner->behaviors()['linkerBehavior']['relations'] as $attr => $relation) {
-                    //skip if ignored
-                    if (!in_array($attr, $relevantAttrs)) continue;
-
-                    if (is_array($relation)) {
-                        $relation = $relation[0];
-                    }
-
-                    $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
-
-                    $old_ids = [];
-
-                    foreach ($this->owner->$relation as $relmodel) {
-                        $old_ids[] = (string)$relmodel->$pk;
-                    }
-
-                    $new_ids = $this->owner->$attr;
-                    if ($new_ids === "") {
-                        $new_ids = [];
-                    }
-                    if ($old_ids != $new_ids) {
-                        $diff_old_ids = array_diff($old_ids, $new_ids);
-                        $diff_new_ids = array_diff($new_ids, $old_ids);
-                        $entry->addChange($attr, join(', ', $diff_old_ids), join(', ', $diff_new_ids));
-                    }
-                }
-            }
-        }
+        $this->linkManyUpdateInsert($relevantAttrs, $entry);
 
         //only save when there were changes
         if ($entry->hasChanges) static::saveEntry($entry);
@@ -406,13 +349,6 @@ class AuditTrailBehavior extends \yii\base\Behavior
             }
         }
 
-        // add the voskobovich virtual attributes
-        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_VOSKOBOVITCH_YII2_MANY_TO_MANY_BEHAVIOUR) {
-            if (key_exists('linkerBehavior', $this->owner->behaviors())) {
-                $cols = array_merge($cols, array_keys($this->owner->behaviors()['linkerBehavior']['relations']));
-            }
-        }
-
         if (count($this->ignoredAttributes) === 0) return $cols;
 
         //remove ignored cols and return
@@ -467,6 +403,45 @@ class AuditTrailBehavior extends \yii\base\Behavior
             foreach ($errors as $err) $lines[] = $err;
         }
         throw new InvalidValueException(sprintf('Error while saving audit-trail-entry: %s', implode(', ', $lines)));
+    }
+
+    /**
+     * @param $relevantAttrs
+     * @param $entry
+     */
+    public function linkManyUpdateInsert($relevantAttrs, $entry): void
+    {
+        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
+            foreach ($this->owner->behaviors() as $relName => $relConfig) {
+                // skip if not a yii2tech/LinkManyBehavior class
+                if (!isset($relConfig['class'])) continue;
+                if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
+                // skip if ignored
+                if (!in_array($relConfig['relationReferenceAttribute'], $relevantAttrs)) continue;
+
+                $relation = $relConfig['relation'];
+                $attribute = $relConfig['relationReferenceAttribute'];
+                $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
+
+                // old ids
+                $old_ids = [];
+                foreach ($this->owner->$relation as $relmodel) {
+                    $old_ids[] = (string)$relmodel->$pk;
+                }
+
+                // new ids
+                $new_ids = $this->owner->$attribute;
+                if ($new_ids === "") {
+                    $new_ids = [];
+                }
+
+                if (!(count($new_ids) == count($old_ids) && !array_diff($new_ids, $old_ids))) {
+                    $diff_old_ids = array_diff($old_ids, $new_ids);
+                    $diff_new_ids = array_diff($new_ids, $old_ids);
+                    $entry->addChange($attribute, join(', ', $old_ids), join(', ', $new_ids));
+                }
+            }
+        }
     }
 
 }
