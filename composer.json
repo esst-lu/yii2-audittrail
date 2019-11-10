@@ -1,10 +1,8 @@
 {
 	"name": "asinfotrack/yii2-audittrail",
 	"type": "yii2-extension",
-	
 	"description": "Yii2-audittrail is a behavior and a set of widgets to track all modifications performed on a model",
 	"keywords": ["yii2", "audittrail", "audit", "trail", "history", "behavior", "widget", "bundle"],
-	
 	"license": "MIT",
 	"authors": [
 		{
@@ -13,20 +11,17 @@
 			"homepage": "http://www.asinfotrack.ch"
 		}
 	],
-	
-	"minimum-stability": "stable",
+    "minimum-stability": "dev",
+	"prefer-stable": true,
 	"support": {
 		"source": "https://github.com/asinfotrack/yii2-audittrail",
 		"issues": "https://github.com/asinfotrack/yii2-audittrail/issues"
 	},
-	
 	"require": {
 		"php": ">=5.4.0",
-
-		"yiisoft/yii2": "~2.0.6",
-		"asinfotrack/yii2-toolbox": "~0.8.0"
+		"yiisoft/yii2": "~2.0",
+		"asinfotrack/yii2-toolbox": "~0.8.13"
 	},
-	
 	"autoload": {
 		"psr-4": {
 			"asinfotrack\\yii2\\audittrail\\": ""
