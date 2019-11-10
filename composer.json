@@ -24,7 +24,7 @@
 		"php": ">=5.4.0",
 
 		"yiisoft/yii2": "~2.0.6",
-		"asinfotrack/yii2-toolbox": "~0.8.13"
+		"asinfotrack/yii2-toolbox": "~0.8.0"
 	},
 	
 	"autoload": {
