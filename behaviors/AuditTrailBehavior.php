@@ -2,6 +2,8 @@
 
 namespace asinfotrack\yii2\audittrail\behaviors;
 
+use monitoring\widgets\LinkManyBehavior;
+use monitoring\widgets\LinkMultipleInputBehavior;
 use Yii;
 use yii\db\ActiveRecord;
 use yii\base\InvalidConfigException;
@@ -121,6 +123,8 @@ class AuditTrailBehavior extends \yii\base\Behavior
      */
     public $attributeOutput = [];
 
+    public $relatedModelOutput= [];
+
     /**
      * @inheritdoc
      */
@@ -140,8 +144,8 @@ class AuditTrailBehavior extends \yii\base\Behavior
     public function events()
     {
         return [
-            ActiveRecord::EVENT_AFTER_INSERT  => 'onAfterInsert',
-            ActiveRecord::EVENT_AFTER_UPDATE  => 'onAfterUpdate',
+            ActiveRecord::EVENT_AFTER_INSERT => 'onAfterInsert',
+            ActiveRecord::EVENT_AFTER_UPDATE => 'onAfterUpdate',
             ActiveRecord::EVENT_BEFORE_DELETE => 'onBeforeDelete',
         ];
     }
@@ -223,6 +227,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
         // but this is not a problem since it is also a limitation of voskobovitch
 
         $this->linkManyUpdateInsert($relevantAttrs, $entry);
+        $this->linkMultipleUpdateInsert($relevantAttrs, $entry);
 
         //only save when there were changes
         if ($entry->hasChanges) static::saveEntry($entry);
@@ -272,11 +277,11 @@ class AuditTrailBehavior extends \yii\base\Behavior
     protected function createPreparedAuditTrailEntry($changeKind)
     {
         $entry = new AuditTrailEntry([
-            'model_type'  => $this->owner->className(),
-            'foreign_pk'  => $this->createPrimaryKeyJson(),
+            'model_type' => $this->owner->className(),
+            'foreign_pk' => $this->createPrimaryKeyJson(),
             'happened_at' => $this->getHappenedAt(),
-            'user_id'     => $this->getUserId(),
-            'type'        => $changeKind,
+            'user_id' => $this->getUserId(),
+            'type' => $changeKind,
         ]);
         return $entry;
     }
@@ -317,11 +322,10 @@ class AuditTrailBehavior extends \yii\base\Behavior
 
     /**
      * Creates the json-representation of the pk (array in the format attribute=>value)
-     * @see \asinfotrack\yii2\toolbox\helpers\PrimaryKey::asJson()
-     *
      * @return string json-representation of the pk-array
      * @throws \yii\base\InvalidParamException if the model is not of type ActiveRecord
      * @throws \yii\base\InvalidConfigException if the models pk is empty or invalid
+     * @see \asinfotrack\yii2\toolbox\helpers\PrimaryKey::asJson()
      */
     protected function createPrimaryKeyJson()
     {
@@ -439,6 +443,36 @@ class AuditTrailBehavior extends \yii\base\Behavior
                     $diff_old_ids = array_diff($old_ids, $new_ids);
                     $diff_new_ids = array_diff($new_ids, $old_ids);
                     $entry->addChange($attribute, join(', ', $old_ids), join(', ', $new_ids));
+                }
+            }
+        }
+    }
+
+    public function linkMultipleUpdateInsert($relevantAttrs, $entry): void
+    {
+        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
+            foreach ($this->owner->behaviors() as $relName => $relConfig) {
+                // skip if not a LinkMultipleInputBehavior class
+                if (!isset($relConfig['class'])) continue;
+
+                if ($relConfig['class'] !== LinkMultipleInputBehavior::class) {
+                    continue;
+                }
+
+                $relation = $relConfig['relation'];
+
+                /** @var LinkMultipleInputBehavior $behavior */
+                $behavior = $this->owner->getBehavior($relName);
+
+                foreach ($behavior->models as $model) {
+                    /** @var ActiveRecord $model */
+                    $relatedEntry = new AuditTrailEntry();
+                    foreach ($model->getDirtyAttributes() as $attrName => $newVal) {
+                        $oldVal = $model->getOldAttribute($attrName);
+                        $relatedModelName=$this->relatedModelOutput[$relName]($relName,$model->getPrimaryKey());
+
+                        $entry->addChange($relName, [$attrName, $model->getPrimaryKey(), $oldVal], $newVal);
+                    }
                 }
             }
         }
