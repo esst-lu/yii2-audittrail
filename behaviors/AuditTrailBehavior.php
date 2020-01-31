@@ -186,6 +186,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
         }
 
         $this->linkManyUpdateInsert($relevantAttrs, $entry);
+        $this->linkMultipleUpdateInsert($relevantAttrs, $entry);
 
         static::saveEntry($entry);
     }
@@ -471,7 +472,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
                         $oldVal = $model->getOldAttribute($attrName);
                         $relatedModelName=$this->relatedModelOutput[$relName]($relName,$model->getPrimaryKey());
 
-                        $entry->addChange($relName, [$attrName, $model->getPrimaryKey(), $oldVal], $newVal);
+                        $entry->addChange($attrName, $oldVal, $newVal,$relatedModelName);
                     }
                 }
             }
