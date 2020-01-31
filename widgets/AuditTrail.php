@@ -167,8 +167,8 @@ class AuditTrail extends \yii\grid\GridView
                 'attribute' => '$relatedModel',
                 'format' => 'raw',
                 'value' => function ($model, $key, $index, $column) {
-                    if ( $model->relatedModelOutput === null) {
-                        return $model->relatedModelOutput;
+                    if ( $model->relatedModel === null) {
+                        return $model->relatedModel;
                     } else {
                         return '';
                     }

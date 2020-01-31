@@ -19,7 +19,7 @@ class AuditTrailEntrySearch extends \asinfotrack\yii2\audittrail\models\AuditTra
 	{
 		return [
 			[['id','happened_at','user_id'], 'integer'],
-			[['id','model_type','happened_at','foreign_pk','user_id','type','data'], 'safe'],
+			[['id','model_type','happened_at','foreign_pk','user_id','type','data', 'relatedModel'], 'safe'],
 			[['type'], 'in', 'range'=>AuditTrailBehavior::$AUDIT_TYPES],
 		];
 	}

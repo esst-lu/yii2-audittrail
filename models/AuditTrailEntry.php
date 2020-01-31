@@ -21,6 +21,7 @@ use asinfotrack\yii2\audittrail\behaviors\AuditTrailBehavior;
  * @property integer $user_id
  * @property string $type
  * @property string $data
+ * @property string $relatedModel
  *
  * @property \stdClass[] $changes
  * @property bool $hasChanges
@@ -50,7 +51,7 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
             [['model_type', 'happened_at', 'foreign_pk', 'type'], 'required'],
 
             [['happened_at', 'user_id'], 'integer'],
-            [['model_type', 'foreign_pk', 'type'], 'string', 'max' => 255],
+            [['model_type', 'foreign_pk', 'type', 'relatedModel'], 'string', 'max' => 255],
 
             [['type'], 'in', 'range' => AuditTrailBehavior::$AUDIT_TYPES],
         ];
@@ -69,6 +70,7 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
             'user_id' => Yii::t('app', 'User ID'),
             'type' => Yii::t('app', 'Type'),
             'data' => Yii::t('app', 'Data'),
+            'relatedModel' => Yii::t('app','Related model'),
         ];
     }
 
