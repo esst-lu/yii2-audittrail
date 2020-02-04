@@ -70,7 +70,7 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
             'user_id' => Yii::t('app', 'User ID'),
             'type' => Yii::t('app', 'Type'),
             'data' => Yii::t('app', 'Data'),
-            'relatedModel' => Yii::t('app','Related model'),
+            'relatedModel' => Yii::t('app', 'Related model'),
         ];
     }
 
@@ -145,15 +145,15 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
      * @param string $attr the name of the attribute
      * @param mixed $from the old value
      * @param mixed $to the new value
-     * @param null $relatedModel related model
      */
-    public function addChange($attr, $from, $to, $relatedModel = null)
+    public function addChange($attr, $from, $to, $relatedAttr = null, $relatedKey = null)
     {
         $change = new \stdClass();
         $change->attr = $attr;
         $change->from = $from;
         $change->to = $to;
-        $change->relatedModel = $relatedModel;
+        $change->relatedAttr = $relatedAttr;
+        $change->relatedKey = $relatedKey;
         $this->_changes[] = $change;
     }
 

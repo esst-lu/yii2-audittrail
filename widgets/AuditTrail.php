@@ -2,6 +2,7 @@
 
 namespace asinfotrack\yii2\audittrail\widgets;
 
+use monitoring\widgets\LinkMultipleInputBehavior;
 use Yii;
 use yii\helpers\Html;
 use yii\base\InvalidConfigException;
@@ -136,6 +137,7 @@ class AuditTrail extends \yii\grid\GridView
         $userIdCallback = $this->userIdCallback;
         $changeTypeCallback = $this->changeTypeCallback;
         $attributeOutput = $this->behaviorInstance->attributeOutput;
+        $relatedModelOutput = $this->behaviorInstance->relatedModelOutput;
         $dataTableOptions = $this->dataTableOptions;
 
         //prepare column config
@@ -164,20 +166,9 @@ class AuditTrail extends \yii\grid\GridView
                 },
             ],
             [
-                'attribute' => '$relatedModel',
-                'format' => 'raw',
-                'value' => function ($model, $key, $index, $column) {
-                    if ( $model->relatedModel === null) {
-                        return $model->relatedModel;
-                    } else {
-                        return '';
-                    }
-                },
-            ],
-            [
                 'attribute' => 'data',
                 'format' => 'raw',
-                'value' => function ($model, $key, $index, $column) use ($attributeOutput, $dataTableOptions) {
+                'value' => function ($model, $key, $index, $column) use ($attributeOutput, $dataTableOptions, $relatedModelOutput) {
                     /* @var $model \yii\db\ActiveRecord */
 
                     //catch empty data
@@ -211,16 +202,27 @@ class AuditTrail extends \yii\grid\GridView
                     //table body
                     $ret .= Html::beginTag('tbody');
                     foreach ($changes as $change) {
+                        if (!isset($change['relatedAttr'])) {
+                            $change['relatedAttr'] = null;
+                        }
+                        if (!isset($change['relatedKey'])) {
+                            $change['relatedKey'] = null;
+                        }
                         //skip hidden attributes
                         if (in_array($change['attr'], $this->hiddenAttributes)) continue;
 
                         //render data row
                         $ret .= Html::beginTag('tr');
-                        $ret .= Html::tag('td', $this->model->getAttributeLabel($change['attr']));
-                        if ($model->type === AuditTrailBehavior::AUDIT_TYPE_UPDATE) {
-                            $ret .= Html::tag('td', $this->formatValue($change['attr'], $change['from']));
+                        if ($change['relatedAttr'] === null) {
+                            $ret .= Html::tag('td', $this->model->getAttributeLabel($change['attr']));
+                        } else {
+                            $ret .= Html::tag('td', $this->formatRelatedModel(
+                                $change['attr'], $change['relatedAttr'], $change['relatedKey']));
                         }
-                        $ret .= Html::tag('td', $this->formatValue($change['attr'], $change['to']));
+                        if ($model->type === AuditTrailBehavior::AUDIT_TYPE_UPDATE) {
+                            $ret .= Html::tag('td', $this->formatValue($change['attr'], $change['from'], $change['relatedAttr']));
+                        }
+                        $ret .= Html::tag('td', $this->formatValue($change['attr'], $change['to'], $change['relatedAttr']));
                         $ret .= Html::endTag('tr');
                     }
                     $ret .= Html::endTag('tbody');
@@ -243,7 +245,7 @@ class AuditTrail extends \yii\grid\GridView
      * @return mixed the formatted output value
      * @throws InvalidConfigException if the attributeOutput for this attribute is not a string or closure
      */
-    protected function formatValue($attrName, $value)
+    protected function formatValue($attrName, $value, $relatedAttr = null)
     {
         //check if there is a formatter defined
         if (isset($this->behaviorInstance->attributeOutput[$attrName])) {
@@ -257,12 +259,53 @@ class AuditTrail extends \yii\grid\GridView
 
             //perform formatting
             if ($attrOutput instanceof \Closure) {
-                return call_user_func($attrOutput, $value);
+                if(key_exists($attrName,$this->model->getBehaviors())){
+                    if (get_class($this->model->getBehavior($attrName)) === LinkMultipleInputBehavior::class) {
+                        return call_user_func($attrOutput, $value, $relatedAttr);
+                    }
+                }
+                else {
+                    return call_user_func($attrOutput, $value);
+                }
             } else {
                 return Yii::$app->formatter->format($value, $attrOutput);
             }
         } else {
             return Yii::$app->formatter->asText($value);
+        }
+    }
+
+    /**
+     * Formats a value into its final outoput. If the value is null, the formatters null-display is used.
+     * If there is a value and nothing is declared in attributeOutput, the raw value is returned. If an
+     * output is defined (either a format-string or a closure, it is used for formatting.
+     *
+     * @param string $attrName name of the attribute
+     * @param mixed $value the value
+     * @return mixed the formatted output value
+     * @throws InvalidConfigException if the attributeOutput for this attribute is not a string or closure
+     */
+    protected function formatRelatedModel($attrName, $relatedAttr, $relatedKey)
+    {
+        //check if there is a formatter defined
+        if (isset($this->behaviorInstance->relatedModelOutput[$attrName])) {
+            $relModOutput = $this->behaviorInstance->relatedModelOutput[$attrName];
+
+            //assert attr output format is either a string or a closure
+            if (!is_string($relModOutput) && !($relModOutput instanceof \Closure)) {
+                $msg = sprintf('The related model output for the attribute %s is invalid. It needs to be a string or a closure!', $attrName);
+                throw new InvalidConfigException($msg);
+            }
+
+            //perform formatting
+            if ($relModOutput instanceof \Closure) {
+                return call_user_func($relModOutput, $relatedAttr, $relatedKey);
+            } else {
+                return $relModOutput;
+            }
+        } else {
+            $msg = sprintf('The related model output for the attribute %s is not defined. It needs to be a string or a closure!', $attrName);
+            throw new InvalidConfigException($msg);
         }
     }
 

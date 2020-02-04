@@ -123,7 +123,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
      */
     public $attributeOutput = [];
 
-    public $relatedModelOutput= [];
+    public $relatedModelOutput = [];
 
     /**
      * @inheritdoc
@@ -460,19 +460,65 @@ class AuditTrailBehavior extends \yii\base\Behavior
                     continue;
                 }
 
+
                 $relation = $relConfig['relation'];
 
                 /** @var LinkMultipleInputBehavior $behavior */
                 $behavior = $this->owner->getBehavior($relName);
-
                 foreach ($behavior->models as $model) {
                     /** @var ActiveRecord $model */
-                    $relatedEntry = new AuditTrailEntry();
                     foreach ($model->getDirtyAttributes() as $attrName => $newVal) {
-                        $oldVal = $model->getOldAttribute($attrName);
-                        $relatedModelName=$this->relatedModelOutput[$relName]($relName,$model->getPrimaryKey());
+                        if (in_array($attrName, $this->ignoredAttributes)) {
+                            continue;
+                        }
 
-                        $entry->addChange($attrName, $oldVal, $newVal,$relatedModelName);
+                        $oldVal = $model->getOldAttribute($attrName);
+
+                        //additional comparison after casting
+                        if ((is_string($newVal) && call_user_func($this->caseSensitive ? 'strcmp' : 'strcasecmp', $oldVal, $newVal) === 0) || $oldVal === $newVal) {
+                            continue;
+                        }
+
+                        //catch empty strings
+                        if ($this->emptyStringIsNull && is_string($newVal) && empty($newVal)) {
+                            if ($oldVal === null) continue;
+                            $newVal = null;
+                        }
+                        $entry->addChange($relName, $oldVal, $newVal, $attrName, $model->getPrimaryKey());
+                    }
+                }
+
+                /*-----------Deleted tabular items--------------*/
+                $oldIds = array_diff($behavior->relationReferenceAttributeValue, $behavior->getNewRelationReferenceAttributeValue());
+
+                $relationItem = $this->owner->getRelation($relation);
+                $relatedClass = $relationItem->modelClass;
+                $relationKey = array_key_first($relationItem->link);
+
+                $models = $relatedClass::find()
+                    ->where(['id' => $oldIds])
+                    ->all();
+
+                foreach ($models as $model) {
+                    if (!in_array('id', $this->ignoredAttributes)) {
+                        $this->ignoredAttributes[] = 'id';
+                    }
+
+                    if (!in_array($relationKey, $this->ignoredAttributes)) {
+                        $this->ignoredAttributes[] = $relationKey;
+                    }
+
+                    if (in_array('CW_Type', $model->attributes())) {
+                        if (!in_array('CW_Type', $this->ignoredAttributes)) {
+                            $this->ignoredAttributes[] = 'CW_Type';
+                        }
+                    }
+
+                    foreach ($model->getAttributes(null, $this->ignoredAttributes) as $attrName => $oldVal) {
+                        if ($oldVal === null) {
+                            continue;
+                        }
+                        $entry->addChange($relName, $oldVal, '', $attrName, $model->getPrimaryKey());
                     }
                 }
             }
