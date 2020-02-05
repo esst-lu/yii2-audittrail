@@ -245,7 +245,7 @@ class AuditTrail extends \yii\grid\GridView
      * @return mixed the formatted output value
      * @throws InvalidConfigException if the attributeOutput for this attribute is not a string or closure
      */
-    protected function formatValue($attrName, $value, $relatedAttr = null)
+    public function formatValue($attrName, $value, $relatedAttr = null)
     {
         //check if there is a formatter defined
         if (isset($this->behaviorInstance->attributeOutput[$attrName])) {
@@ -285,7 +285,7 @@ class AuditTrail extends \yii\grid\GridView
      * @return mixed the formatted output value
      * @throws InvalidConfigException if the attributeOutput for this attribute is not a string or closure
      */
-    protected function formatRelatedModel($attrName, $relatedAttr, $relatedKey)
+    public function formatRelatedModel($attrName, $relatedAttr, $relatedKey)
     {
         //check if there is a formatter defined
         if (isset($this->behaviorInstance->relatedModelOutput[$attrName])) {
