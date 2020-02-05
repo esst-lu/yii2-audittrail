@@ -19,6 +19,8 @@ use asinfotrack\yii2\audittrail\behaviors\AuditTrailBehavior;
  * @property integer $happened_at
  * @property string $foreign_pk
  * @property integer $user_id
+ * @property integer $contact_id_employer
+ * @property integer $mandant_id
  * @property string $type
  * @property string $data
  * @property string $relatedModel
@@ -50,7 +52,7 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
         return [
             [['model_type', 'happened_at', 'foreign_pk', 'type'], 'required'],
 
-            [['happened_at', 'user_id'], 'integer'],
+            [['happened_at', 'user_id','contact_id_employer' ,'mandant_id'], 'integer'],
             [['model_type', 'foreign_pk', 'type', 'relatedModel'], 'string', 'max' => 255],
 
             [['type'], 'in', 'range' => AuditTrailBehavior::$AUDIT_TYPES],
@@ -93,6 +95,10 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
     {
         //prevent updating of audit trail entries
         if (!$insert) throw new InvalidCallException('Updating audit trail entries is not allowed!');
+
+        // prepared mandant and employer field
+        $this->mandant_id=Yii::$app->session->get('mandant_id');
+        $this->contact_id_employer=array_key_first(Yii::$app->session->get('Filter_employer_ids'));
 
         //prepare data attribute
         if ($this->_changes !== null) {
