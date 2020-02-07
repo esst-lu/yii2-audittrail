@@ -125,6 +125,8 @@ class AuditTrailBehavior extends \yii\base\Behavior
 
     public $relatedModelOutput = [];
 
+    public $globalAttributes = [];
+
     /**
      * @inheritdoc
      */
@@ -282,8 +284,24 @@ class AuditTrailBehavior extends \yii\base\Behavior
             'foreign_pk' => $this->createPrimaryKeyJson(),
             'happened_at' => $this->getHappenedAt(),
             'user_id' => $this->getUserId(),
+            'mandant_id' => Yii::$app->session->get('mandant_id'),
             'type' => $changeKind,
         ]);
+
+
+        if ($this->owner->hasProperty('CW_Type')) {
+            $entry->CW_Type = $this->owner->CW_Type;
+        }
+
+        if (Yii::$app->controller->hasProperty('CW_Type')) {
+            $entry->CW_Type = Yii::$app->controller->CW_Type;
+        }
+
+        if ($this->owner->hasProperty('worker_id')) {
+            $entry->worker_id = $this->owner->worker_id;
+        }
+
+
         return $entry;
     }
 
