@@ -19,7 +19,7 @@ class AuditTrailEntrySearch extends \asinfotrack\yii2\audittrail\models\AuditTra
 	{
 		return [
 			[['id','happened_at','user_id'], 'integer'],
-			[['id','model_type','happened_at','foreign_pk','user_id','type','data', 'relatedModel'], 'safe'],
+			[['id','model_type','happened_at','foreign_pk','user_id','type','data'], 'safe'],
 			[['type'], 'in', 'range'=>AuditTrailBehavior::$AUDIT_TYPES],
 		];
 	}
@@ -32,14 +32,15 @@ class AuditTrailEntrySearch extends \asinfotrack\yii2\audittrail\models\AuditTra
 		//bypass scenarios() implementation in the parent class
 		return Model::scenarios();
 	}
-	
-	/**
-	 * Creates the data-provider for searching audit trails
-	 *
-	 * @param mixed $params the params as used by yiis search methods
-	 * @param \yii\db\ActiveRecord $subject the model to get the audit trail entries for
-	 * @return \yii\data\ActiveDataProvider
-	 */
+
+    /**
+     * Creates the data-provider for searching audit trails
+     *
+     * @param mixed $params the params as used by yiis search methods
+     * @param \yii\db\ActiveRecord $subject the model to get the audit trail entries for
+     * @return \yii\data\ActiveDataProvider
+     * @throws \yii\base\InvalidConfigException
+     */
 	public function search($params, $subject=null)
 	{
 		/* @var $query \asinfotrack\yii2\audittrail\models\AuditTrailEntryQuery */

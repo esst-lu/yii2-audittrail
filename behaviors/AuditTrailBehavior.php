@@ -10,8 +10,7 @@ use yii\base\InvalidConfigException;
 use yii\base\InvalidValueException;
 use asinfotrack\yii2\audittrail\models\AuditTrailEntry;
 use asinfotrack\yii2\toolbox\helpers\PrimaryKey;
-use yii\helpers\ArrayHelper;
-use yii\web\HeadersAlreadySentException;
+use yii2tech\ar\linkmany\LinkManyBehavior;
 
 /**
  * Behavior which enables a model to be audited. Each modification (insert, update and delete)
@@ -32,10 +31,6 @@ class AuditTrailBehavior extends \yii\base\Behavior
     const AUDIT_TYPE_DELETE = 'delete';
     const AUDIT_TYPE_VIEW = 'view';
     const AUDIT_TYPE_PRINT = 'print';
-
-    //constants whether to include one ore more one-to-many extensions
-    const LINK_MANY_NONE = 0;
-    const LINK_MANY_YII2TECH_AR_LINKMANY = 2;
 
     /**
      * @var string[] holds all allowed audit types
@@ -101,11 +96,6 @@ class AuditTrailBehavior extends \yii\base\Behavior
     public $logPrint = true;
 
     /**
-     * @var integer whether to include a many-to-many behaviour extensions
-     */
-    public $manyToManyBehaviourExtensions = self::LINK_MANY_NONE;
-
-    /**
      * @var \Closure[] contains an array with a model attribute as key and a either a string with
      * a default yii-format or a closure as its value. Example:
      * <code>
@@ -157,6 +147,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
      *
      * @param \yii\db\AfterSaveEvent $event the after save event
      * @throws InvalidValueException
+     * @throws InvalidConfigException
      */
     public function onAfterInsert($event)
     {
@@ -198,6 +189,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
      *
      * @param \yii\db\AfterSaveEvent $event the after save event
      * @throws InvalidValueException
+     * @throws InvalidConfigException
      */
     public function onAfterUpdate($event)
     {
@@ -363,13 +355,11 @@ class AuditTrailBehavior extends \yii\base\Behavior
         $cols = array_keys($this->owner->getTableSchema()->columns);
 
         // add the yii2tech/ar-linkmany virtual attributes
-        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
-            foreach ($this->owner->behaviors() as $relName => $relConfig) {
-                // skip if not a yii2tech/LinkManyBehavior class
-                if (!isset($relConfig['class'])) continue;
-                if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
-                $cols[] = $relConfig['relationReferenceAttribute'];
-            }
+        foreach ($this->owner->behaviors() as $relName => $relConfig) {
+            // skip if not a yii2tech/LinkManyBehavior class
+            if (!isset($relConfig['class'])) continue;
+            if ($relConfig['class'] !== LinkManyBehavior::class) continue;
+            $cols[] = $relConfig['relationReferenceAttribute'];
         }
 
         if (count($this->ignoredAttributes) === 0) return $cols;
@@ -434,110 +424,92 @@ class AuditTrailBehavior extends \yii\base\Behavior
      */
     public function linkManyUpdateInsert($relevantAttrs, $entry): void
     {
-        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
-            foreach ($this->owner->behaviors() as $relName => $relConfig) {
-                // skip if not a yii2tech/LinkManyBehavior class
-                if (!isset($relConfig['class'])) continue;
-                if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
-                // skip if ignored
-                if (!in_array($relConfig['relationReferenceAttribute'], $relevantAttrs)) continue;
+        foreach ($this->owner->behaviors() as $relName => $relConfig) {
+            // skip if not a yii2tech/LinkManyBehavior class
+            if (!isset($relConfig['class'])) continue;
+            if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
+            // skip if ignored
+            if (!in_array($relConfig['relationReferenceAttribute'], $relevantAttrs)) continue;
 
-                $relation = $relConfig['relation'];
-                $attribute = $relConfig['relationReferenceAttribute'];
-                $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
+            $relation = $relConfig['relation'];
+            $attribute = $relConfig['relationReferenceAttribute'];
+            $pk = $this->owner->getRelation($relation)->modelClass::primaryKey()[0];
 
-                // old ids
-                $old_ids = [];
-                foreach ($this->owner->$relation as $relmodel) {
-                    $old_ids[] = (string)$relmodel->$pk;
-                }
+            // old ids
+            $old_ids = [];
+            foreach ($this->owner->$relation as $relmodel) {
+                $old_ids[] = (string)$relmodel->$pk;
+            }
 
-                // new ids
-                $new_ids = $this->owner->$attribute;
-                if ($new_ids === "") {
-                    $new_ids = [];
-                }
+            // new ids
+            $new_ids = $this->owner->$attribute;
+            if ($new_ids === "") {
+                $new_ids = [];
+            }
 
-                if (!(count($new_ids) == count($old_ids) && !array_diff($new_ids, $old_ids))) {
-                    $diff_old_ids = array_diff($old_ids, $new_ids);
-                    $diff_new_ids = array_diff($new_ids, $old_ids);
-                    $entry->addChange($attribute, join(', ', $old_ids), join(', ', $new_ids));
-                }
+            if (!(count($new_ids) == count($old_ids) && !array_diff($new_ids, $old_ids))) {
+                $diff_old_ids = array_diff($old_ids, $new_ids);
+                $diff_new_ids = array_diff($new_ids, $old_ids);
+                $entry->addChange($attribute, join(', ', $old_ids), join(', ', $new_ids));
             }
         }
     }
 
     public function linkMultipleUpdateInsert($relevantAttrs, $entry): void
     {
-        if ($this->manyToManyBehaviourExtensions & self::LINK_MANY_YII2TECH_AR_LINKMANY) {
-            foreach ($this->owner->behaviors() as $relName => $relConfig) {
-                // skip if not a LinkMultipleInputBehavior class
-                if (!isset($relConfig['class'])) continue;
+        foreach ($this->owner->behaviors() as $relName => $relConfig) {
+            // skip if not a LinkMultipleInputBehavior class
+            if (!isset($relConfig['class'])) continue;
 
-                if ($relConfig['class'] !== LinkMultipleInputBehavior::class) {
-                    continue;
+            if ($relConfig['class'] !== LinkMultipleInputBehavior::class) {
+                continue;
+            }
+
+
+            $relation = $relConfig['relation'];
+
+            /** @var LinkMultipleInputBehavior $behavior */
+            $behavior = $this->owner->getBehavior($relName);
+            foreach ($behavior->models as $model) {
+                /** @var ActiveRecord $model */
+                foreach ($model->getDirtyAttributes() as $attrName => $newVal) {
+                    if (in_array($attrName, $this->ignoredAttributes)) {
+                        continue;
+                    }
+
+                    $oldVal = $model->getOldAttribute($attrName);
+
+                    //additional comparison after casting
+                    if ((is_string($newVal) && call_user_func($this->caseSensitive ? 'strcmp' : 'strcasecmp', $oldVal, $newVal) === 0) || $oldVal === $newVal) {
+                        continue;
+                    }
+
+                    //catch empty strings
+                    if ($this->emptyStringIsNull && is_string($newVal) && empty($newVal)) {
+                        if ($oldVal === null) continue;
+                        $newVal = null;
+                    }
+                    $entry->addChange($relName, $oldVal, $newVal, $attrName, $model->getPrimaryKey());
                 }
+            }
 
+            /*-----------Deleted tabular items--------------*/
+            $oldIds = array_diff($behavior->relationReferenceAttributeValue, $behavior->getNewRelationReferenceAttributeValue());
 
-                $relation = $relConfig['relation'];
+            $relationItem = $this->owner->getRelation($relation);
+            $relatedClass = $relationItem->modelClass;
+            // $relationKey = array_key_first($relationItem->link);
 
-                /** @var LinkMultipleInputBehavior $behavior */
-                $behavior = $this->owner->getBehavior($relName);
-                foreach ($behavior->models as $model) {
-                    /** @var ActiveRecord $model */
-                    foreach ($model->getDirtyAttributes() as $attrName => $newVal) {
-                        if (in_array($attrName, $this->ignoredAttributes)) {
-                            continue;
-                        }
+            $models = $relatedClass::find()
+                ->where(['id' => $oldIds])
+                ->all();
 
-                        $oldVal = $model->getOldAttribute($attrName);
-
-                        //additional comparison after casting
-                        if ((is_string($newVal) && call_user_func($this->caseSensitive ? 'strcmp' : 'strcasecmp', $oldVal, $newVal) === 0) || $oldVal === $newVal) {
-                            continue;
-                        }
-
-                        //catch empty strings
-                        if ($this->emptyStringIsNull && is_string($newVal) && empty($newVal)) {
-                            if ($oldVal === null) continue;
-                            $newVal = null;
-                        }
-                        $entry->addChange($relName, $oldVal, $newVal, $attrName, $model->getPrimaryKey());
+            foreach ($models as $model) {
+                foreach ($model->getAttributes(null, $this->ignoredAttributes) as $attrName => $oldVal) {
+                    if ($oldVal === null) {
+                        continue;
                     }
-                }
-
-                /*-----------Deleted tabular items--------------*/
-                $oldIds = array_diff($behavior->relationReferenceAttributeValue, $behavior->getNewRelationReferenceAttributeValue());
-
-                $relationItem = $this->owner->getRelation($relation);
-                $relatedClass = $relationItem->modelClass;
-                $relationKey = array_key_first($relationItem->link);
-
-                $models = $relatedClass::find()
-                    ->where(['id' => $oldIds])
-                    ->all();
-
-                foreach ($models as $model) {
-                    if (!in_array('id', $this->ignoredAttributes)) {
-                        $this->ignoredAttributes[] = 'id';
-                    }
-
-                    if (!in_array($relationKey, $this->ignoredAttributes)) {
-                        $this->ignoredAttributes[] = $relationKey;
-                    }
-
-                    if (in_array('CW_Type', $model->attributes())) {
-                        if (!in_array('CW_Type', $this->ignoredAttributes)) {
-                            $this->ignoredAttributes[] = 'CW_Type';
-                        }
-                    }
-
-                    foreach ($model->getAttributes(null, $this->ignoredAttributes) as $attrName => $oldVal) {
-                        if ($oldVal === null) {
-                            continue;
-                        }
-                        $entry->addChange($relName, $oldVal, '', $attrName, $model->getPrimaryKey());
-                    }
+                    $entry->addChange($relName, $oldVal, '', $attrName, $model->getPrimaryKey());
                 }
             }
         }
