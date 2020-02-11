@@ -18,6 +18,7 @@ use asinfotrack\yii2\audittrail\behaviors\AuditTrailBehavior;
  * @property string $model_type
  * @property integer $happened_at
  * @property string $foreign_pk
+ * @property integer $model_id
  * @property integer $user_id
  * @property integer $mandant_id
  * @property integer $worker_id
@@ -52,7 +53,7 @@ class AuditTrailEntry extends \yii\db\ActiveRecord
         return [
             [['model_type', 'happened_at', 'foreign_pk', 'type'], 'required'],
 
-            [['happened_at', 'user_id', 'mandant_id', 'worker_id'], 'integer'],
+            [['happened_at', 'model_id', 'user_id', 'mandant_id', 'worker_id'], 'integer'],
             [['model_type', 'foreign_pk', 'type'], 'string', 'max' => 255],
             [['CW_Type'], 'string', 'max' => 1],
 

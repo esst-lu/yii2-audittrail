@@ -275,6 +275,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
             'model_type' => $this->owner->className(),
             'foreign_pk' => $this->createPrimaryKeyJson(),
             'happened_at' => $this->getHappenedAt(),
+            'model_id' => $this->owner->id,
             'user_id' => $this->getUserId(),
             'mandant_id' => Yii::$app->session->get('mandant_id'),
             'type' => $changeKind,
