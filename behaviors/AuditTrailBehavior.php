@@ -2,7 +2,7 @@
 
 namespace asinfotrack\yii2\audittrail\behaviors;
 
-use monitoring\widgets\LinkManyBehavior;
+use yii2tech\ar\linkmany\LinkManyBehavior;
 use monitoring\widgets\LinkMultipleInputBehavior;
 use Yii;
 use yii\db\ActiveRecord;
@@ -10,7 +10,6 @@ use yii\base\InvalidConfigException;
 use yii\base\InvalidValueException;
 use asinfotrack\yii2\audittrail\models\AuditTrailEntry;
 use asinfotrack\yii2\toolbox\helpers\PrimaryKey;
-use yii2tech\ar\linkmany\LinkManyBehavior;
 
 /**
  * Behavior which enables a model to be audited. Each modification (insert, update and delete)
@@ -428,7 +427,7 @@ class AuditTrailBehavior extends \yii\base\Behavior
         foreach ($this->owner->behaviors() as $relName => $relConfig) {
             // skip if not a yii2tech/LinkManyBehavior class
             if (!isset($relConfig['class'])) continue;
-            if ($relConfig['class'] !== "yii2tech\ar\linkmany\LinkManyBehavior") continue;
+            if ($relConfig['class'] !== LinkManyBehavior::class) continue;
             // skip if ignored
             if (!in_array($relConfig['relationReferenceAttribute'], $relevantAttrs)) continue;
 
