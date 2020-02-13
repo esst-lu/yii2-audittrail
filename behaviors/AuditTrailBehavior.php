@@ -470,6 +470,8 @@ class AuditTrailBehavior extends \yii\base\Behavior
 
             /** @var LinkMultipleInputBehavior $behavior */
             $behavior = $this->owner->getBehavior($relName);
+            if($behavior->models === null) continue;
+            
             foreach ($behavior->models as $model) {
                 /** @var ActiveRecord $model */
                 foreach ($model->getDirtyAttributes() as $attrName => $newVal) {
