@@ -270,16 +270,21 @@ class AuditTrailBehavior extends \yii\base\Behavior
      */
     protected function createPreparedAuditTrailEntry($changeKind)
     {
+        $mandantId = is_a(Yii::$app, 'yii\web\Application') ? Yii::$app->session->get('mandant_id') : null;
+
+        if ($mandantId === null && $this->owner->hasAttribute('mandant_id')) {
+            $mandantId = $this->owner->mandant_id;
+        }
+
         $entry = new AuditTrailEntry([
             'model_type' => $this->owner->className(),
             'foreign_pk' => $this->createPrimaryKeyJson(),
             'happened_at' => $this->getHappenedAt(),
             'model_id' => $this->owner->id,
             'user_id' => $this->getUserId(),
-            'mandant_id' => Yii::$app->session->get('mandant_id'),
+            'mandant_id' =>$mandantId,
             'type' => $changeKind,
         ]);
-
 
         if ($this->owner->hasProperty('CW_Type')) {
             $entry->CW_Type = $this->owner->CW_Type;
@@ -387,12 +392,18 @@ class AuditTrailBehavior extends \yii\base\Behavior
         if (is_string($newVal) && is_numeric($newVal)) {
             if (is_bool($oldVal)) {
                 return boolval($newVal);
-            } else if (preg_match('/[0-9]+/', $newVal)) {
-                return intval($newVal);
-            } else if (is_float($oldVal)) {
-                return floatval($newVal);
-            } else if (is_double($oldVal)) {
-                return doubleval($newVal);
+            } else {
+                if (preg_match('/^\d+$/', $newVal)) {
+                    return intval($newVal);
+                } else {
+                    if (is_float($oldVal)) {
+                        return floatval($newVal);
+                    } else {
+                        if (is_double($oldVal)) {
+                            return doubleval($newVal);
+                        }
+                    }
+                }
             }
         }
 
